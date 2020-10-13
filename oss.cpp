@@ -13,7 +13,7 @@
 //#include <<cstdlib>
 //#include <cstring>
 
-#define MAX_C (100)     //max allowed value for option -c
+#include <shmfunctions.h>
 
 using namespace std;
 
@@ -30,7 +30,7 @@ void printHelp() {
 }
 
 
-/* print advisory messages for minor unexpectancies (non-error, non-fatal)*/
+/* print advisory messages for minor unexpectancies (non-error, non-fatal) */
 void printWarning(int warning_code) {
   cout << "Warning: ";
   switch(warning_code) {
@@ -48,16 +48,28 @@ void printWarning(int warning_code) {
 bool kms() {
   //TODO terminate child processes before self
   cout << "oss is terminating." << endl;
+  return 0;
 }
 
 
 int main(int argc, char *argv[]) {
-  cout << "oss is running." << endl;
 
+  const int MAX_C (100);               //max allowed value for option -c
+  const char* THIS_FILE = "oss";       //filename for shared memory association
+  int BLOCK_SIZE = (sizeof(int) * 3);  //shared memory block size
+
+  /* cmdl args */
   int option;              //getopt option
   int pr_max = 5;          //max number of child processes spawned (def: 5) 
   string logfile = "log";  //filename for log file
   int ttk = 20;            //time to kill self and all children (def: 20)
+
+  /* shared memory values */
+  int shm_clock_s = 0;     //shared clock (seconds)
+  int shm_clock_ns = 0;    //shared clock (nanoseconds)
+  int shm_pid = 0;         //shared user process id for termination 
+
+  cout << "oss is running." << endl;
 
   while ( (option = getopt(argc, argv, "hc:l:t:")) != -1 ) {
   
@@ -84,10 +96,40 @@ int main(int argc, char *argv[]) {
         cout << ttk << endl;
         break;
       case '?':
+        //TODO
         return 1;
     }
   
   }
- 
-  return kms();
+
+  
+  /* OSS Process  */
+  int *shm_array;
+
+  shm_array = (int*)attachSharedMemory(THIS_FILE, BLOCK_SIZE);
+   
+  if (shm_array == NULL) {
+    printf("Error: couldn't get memory block.\n");
+    return 1;
+  }
+  cout << "Pointer: " << shm_array << endl;
+  cout << "Pointer: " << *shm_array << endl;
+  cout << "Pointer: " << &shm_array << endl;
+  
+  //TODO define clock and get it into shared memory
+  //cout << "Let's write into shared memory: " << endl;
+  shm_array[0] = 4;
+  shm_array[1] = 5;
+  shm_array[2] = 6;
+
+  cout << "Now let's read from shared memory: " << endl;
+  printf("%d\n", shm_array[0] );
+  printf("%d\n", shm_array[1] );
+  printf("%d\n", shm_array[2] );
+
+  //cout << "Now detatching." << endl;
+  //detachSharedMemory(shm_array);
+
+
+  return 0;
 }
