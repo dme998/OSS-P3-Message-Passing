@@ -4,7 +4,7 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 #define IPC_RESULT_ERROR (-1) 
-#define PERM (0644) //permissions number for shmflg
+#define PERM (0666) //permissions number for shmflg
 
 /* *********************** */
 /* Shared Memory Functions */
@@ -52,8 +52,8 @@ bool detachSharedMemory(char *block) {
 
 
 
-bool removeSharedMemory(char *filename) {
-  int shared_block_id = getSharedMemory(filename, 0);
+bool removeSharedMemory(char *block) {
+  int shared_block_id = getSharedMemory(block, 0);
 
   if (shared_block_id == IPC_RESULT_ERROR) {
     return NULL;
