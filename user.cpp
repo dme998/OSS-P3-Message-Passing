@@ -6,11 +6,12 @@
 
 #include <iostream>
 #include <unistd.h>
-#include<sys/msg.h>
+#include <sys/msg.h>
 #include <shmfunctions.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/msg.h>
+#include <stdlib.h>
 
 using namespace std;
 
@@ -76,14 +77,62 @@ int main() {
 
 
   //send message back (assuming oss hasn't terminated)
-  strcpy(mymsg.mtext, "hello master\n");
+  strcpy(mymsg.mtext, "hello master");
   if ( msgsnd(msqid, &mymsg, strlen(mymsg.mtext)+1, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
     perror("perror: user msgsnd");
   }
   else {
     cout << "user: send msg: " << mymsg.mtext << endl;
   }
-  sleep(2);
+
+
+
+  cout << "user: awake for critical section" << endl;
+  /* CRITICAL SECTION */
+  bool hasFlag = false; //master starts with flag (user should default to false)
+  long mtype_flag = 3;
+  mymsg.mtype = mtype_flag;  //distinguish flag messages from earlier tests
+  int debugLoopBreak = 0;
+  //strcpy(mymsg.mtext, "FLAG");
+  
+  for(int i=0; i<3; i++) {
+    sleep(1);
+    cout << "user: loop number: " << i << endl;
+    //parbegin
+    while (hasFlag == false) {
+      //cout << "user: while hasFlag is FALSE" << endl;
+      if ( msgrcv(msqid, &mymsg, 80, mtype_flag, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
+        perror("perror: oss msgrcv");
+        sleep(1); //pause before trying msgq again
+        debugLoopBreak++;
+        if (debugLoopBreak >= 5) {exit(1); exit(1);}
+      }
+      else {
+        cout << "user: flag obtained." << mymsg.mtext << endl;
+        hasFlag = true;
+      }
+    }
+
+    //CRITICAL
+    if (hasFlag) {
+      cout << "user: shared memory read: " << shm_array[2] << endl;
+      shm_array[2] = 99;
+      cout << "user: shared memory write: " << shm_array[2] << endl;
+      
+      //parend
+      if ( msgsnd(msqid, &mymsg, strlen(mymsg.mtext) + 1, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
+        perror("perror: oss msgsnd");
+        exit(1); //TODO kms
+      }
+      else {
+        cout << "user: flag given up: " << mymsg.mtext << endl;
+        hasFlag = false;
+      }
+    }
+  } // i-loop
+
+
+
   cout << "user: termination successful." << endl;
   return 0;
 }

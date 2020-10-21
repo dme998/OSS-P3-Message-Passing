@@ -83,24 +83,35 @@ int fexe() {
 
 
 /* cleanup, terminate self and all child processes  */
-int kms() {
+int kms(int msqid) {
   //TODO terminate child processes before self //TODO have a timeout period
   cout << "oss is terminating (waiting for children)..." << endl;
   pid_t wpid;
   int status = 0;
   while( (wpid = wait(&status)) > 0 );
+  cout << "oss: no more children." << endl;
   
   /* Free Shared Memory */
-  cout << "Now freeing memory..." << endl;
+  cout << "oss: now freeing memory..." << endl;
   if ( shmctl(getSharedMemory(THIS_FILE, BLOCK_SIZE), IPC_RMID, NULL) == IPC_RESULT_ERROR ) {
     perror("perror: shmctl");
     return 1;
   }
   else { 
-    printf("Memory freed.\n");
+    printf("oss: shared Memory freed.\n");
   }
 
-  cout << "oss termination successful." << endl;
+  /* Free Message Queue */
+  cout << "oss: now removing message queue..." << endl;
+  if ( msgctl(msqid, IPC_RMID, NULL) == IPC_RESULT_ERROR ) {
+    perror("perror: oss msgctl");
+    return 1;
+  }
+  else {
+    printf("oss: message queeue destroyed.\n");
+  }
+
+  cout << "oss: termination successful." << endl;
   return 0;
 }
 
@@ -175,14 +186,96 @@ int main(int argc, char *argv[]) {
   shm_array[1] = 5;
   shm_array[2] = 6;
 
-  //cout << "Now let's read from shared memory: " << endl;
-  //printf("%d\n", shm_array[0] );
-  //printf("%d\n", shm_array[1] );
+  //cout << "Now let's read from shared memory: ";
+  //printf("%d ", shm_array[0] );
+  //printf("%d ", shm_array[1] );
   //printf("%d\n", shm_array[2] );
 
 
   fexe(); // fork, exec
   
+
+  
+
+
+
+  /* Message Queues */ 
+  int msqid; 
+  key_t msqkey = 1984;  //TODO arbitrary value, use ftok
+  mymsg_t mymsg;
+  int msqsize;
+
+  msqid = msgget(msqkey, PERM | IPC_CREAT);
+  if (msqid == IPC_RESULT_ERROR) {
+    perror("oss msgget");
+  }
+  else {
+    cout << "oss: msgget successful" << endl;
+  }
+  sleep(1);
+  
+  //send message
+  strcpy( mymsg.mtext, "hello user" );  
+  if ( msgsnd(msqid, &mymsg, strlen(mymsg.mtext) + 1, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
+    perror("oss msgsnd");
+  }
+  printf("oss send: %s\n", mymsg.mtext);
+  sleep(4);
+    
+  //receive message 
+  if ( msgrcv( msqid, &mymsg, 80, 0, MSG_NOERROR) == IPC_RESULT_ERROR ) {
+    perror("oss msgrcv");
+  }
+  else {
+    cout << "oss received message: " << mymsg.mtext << endl;
+  }
+
+
+  cout << "oss: awake for critical section" << endl;
+  /* CRITICAL SECTION */
+  bool hasFlag = true; //master starts with flag (user should default to false)
+  strcpy(mymsg.mtext, "FLAG");
+  long mtype_flag = 3;
+  mymsg.mtype = mtype_flag;  //distinguish flag messages from earlier test messages
+  
+  for(int i=0; i<3; i++) {
+    sleep(1);
+    cout << "oss: loop number: " << i << endl;
+    
+    //parbegin
+    while (hasFlag == false) {
+      //cout << "oss: enter while (hasFlag == false)" << endl;
+      if ( msgrcv(msqid, &mymsg, 80, mtype_flag, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
+        perror("oss msgrcv");
+        sleep(1); //pause before trying msgq again
+      }
+      else {
+        cout << "oss: flag obtained." << mymsg.mtext << endl;
+        hasFlag = true;
+      }
+    }
+    //cout << "oss: exit while (hasFlag == false) and entering innermost critsec" << endl;
+
+    //CRITICAL
+    if (hasFlag) {
+      //cout << "oss: we're in" << endl;
+      cout << "oss: shared memory read: " << shm_array[2] << endl;
+      shm_array[2] = 11;
+      cout << "oss: shared memory write: " << shm_array[2] << endl;
+      
+      //parend
+      if ( msgsnd(msqid, &mymsg, strlen(mymsg.mtext) + 1, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
+        perror("oss msgsnd");
+        exit(1); //TODO kms
+      }
+      else {
+        cout << "oss: flag given up: " << mymsg.mtext << endl;
+        hasFlag = false;
+      }
+    }
+  } // i-loop
+   
+
 
   /* Detach from Shared Memory */
   //cout << "Now detatching." << endl;
@@ -190,38 +283,5 @@ int main(int argc, char *argv[]) {
     perror("perror: shmdt");
   }
 
-
-
-
-  /* Message Queues */ //TODO
-  int msqid; 
-  key_t msqkey = 1984;  //TODO arbitrary value
-  mymsg_t mymsg;
-  int msqsize;
-
-  msqid = msgget(msqkey, PERM | IPC_CREAT);
-  if (msqid == IPC_RESULT_ERROR) {
-    perror("perror: oss msgget");
-  }
-  else {
-    cout << "oss: msgget successful" << endl;
-  }
-  sleep(1);
-  strcpy( mymsg.mtext, "hello user\n" );  
-  if ( msgsnd(msqid, &mymsg, strlen(mymsg.mtext) + 1, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
-    perror("perror: oss msgsnd");
-  }
-  printf("oss send: %s\n", mymsg.mtext);
-  sleep(4);
-  
-  
-  //receive message 
-  if ( msgrcv( msqid, &mymsg, 80, 0, MSG_NOERROR) == IPC_RESULT_ERROR ) {
-    perror("perror: oss msgrcv");
-  }
-  else {
-    cout << "oss received message: " << mymsg.mtext << endl;
-  }
-
-  return kms();
+  return kms(msqid);
 }
