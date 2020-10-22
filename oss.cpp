@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
   /* Allocate and attach to shared memory */
   int *shm_array; //shm pointer
   shm_array = (int*)attachSharedMemory(THIS_FILE, BLOCK_SIZE);
-   
+  cout << "oss: shm created" << endl; 
   if (shm_array == NULL) {
       printf("Error: couldn't get memory block.\n");
     return 1;

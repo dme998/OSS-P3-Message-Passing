@@ -14,12 +14,13 @@ static int getSharedMemory(const char *filename, int size) {
   key_t key;
 
   // Request a key, linked to a filename
-  key = ftok(filename, 0);
+  key = ftok(filename, 2);
   if (key == IPC_RESULT_ERROR) {
     return (IPC_RESULT_ERROR);
   }
 
   // get shared block of memory  or create it if it doesn't exist
+  std::cout<<"shmfunc key: " << key << std::endl;
   return shmget(key, size, PERM | IPC_CREAT);
 }
 

@@ -7,46 +7,90 @@
 #include <iostream>
 #include <unistd.h>
 #include <sys/msg.h>
-#include <shmfunctions.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/ipc.h>    //shared memory
+#include <sys/shm.h>    //shared memory
 #include <sys/msg.h>
 #include <stdlib.h>
+#include <stdio.h>      // perror
+#define IPC_NOCREAT (0)
+#define PERM (0666)
+#define IPC_RESULT_ERROR (-1)
 
 using namespace std;
+
+int BLOCK_SIZE = (sizeof(int) * 3);  //shared memory block size
+int PROJ_ID = 2;  //arbitrary value for ftok (match this with oss ftok call)
 
 typedef struct {
   long mtype;
   char mtext[80];
 } mymsg_t;
 
+/*
+int kms(int *shm_array) {
+  //free memory and terminate
 
-int main() {
-  cout << "user: hello world" << endl;
-  //sleep(1);
-
-  int *shm_array;
-
-  shm_array = (int *)attachSharedMemory("oss", 12);
-  if (shm_array == NULL) {
-    printf("Error getting memblock\n");
-    return 1;
+  // Detach from Shared Memory 
+  cout << "user: now detatching from shared memory." << endl;
+  if (shmdt((void *)shm_array) == IPC_RESULT_ERROR) {
+    perror("perror: shmdt");
   }
   
-  //cout << "Child reading from shared memory..." << endl;
-  //printf("...retrieved: \n%d\n", shm_array[0] );
-  //printf("%d\n", shm_array[1]);
-  //printf("%d\n", shm_array[2]);
+  return 0;
+}*/
 
-  //cout << "Child modifying shared memory: 9 10 11..." << endl;
+
+int main() {
+  
+  cout << "user: hello world" << endl;
+  sleep(1);
+
+  
+  /* SHARED MEMORY */
+  
+  int shared_block_id;  //shmid
+  key_t shmkey;         //obtained via ftok()
+  int *shm_array;       //pointer to shm block
+
+  //obtain key
+  shmkey = ftok("oss", 2);
+  if (shmkey == IPC_RESULT_ERROR) {
+    perror("user: ftok");
+  }
+  
+  //check for existing shared memory (does not create)
+  shared_block_id = shmget(shmkey, BLOCK_SIZE, 0);
+  if ( shared_block_id == IPC_RESULT_ERROR ) {
+    //printf("%s", strerror(errno));
+    perror("user: shmget");
+    exit(1);
+  }
+
+  //attach to existing shared memory 
+  shm_array = (int *)shmat(shared_block_id, NULL, 0);
+  if ( shm_array == (int *)IPC_RESULT_ERROR ) {
+    //printf("%s", strerror(errno));
+    perror("user: shmat");
+    exit(1);
+  }
+
+  
+  cout << "user: reading from shared memory..." << endl;
+  printf("...retrieved: \n%d\n", shm_array[0] );
+  printf("%d\n", shm_array[1]);
+  printf("%d\n", shm_array[2]);
+
+  cout << "user: modifying shared memory: 9 10 11..." << endl;
   shm_array[0] = 9;
   shm_array[1] = 10;
   shm_array[2] = 11;
 
-  //cout << "user: reading from shared memory..." << endl;
-  //printf("...retrieved: \n%d\n", shm_array[0] );
-  //printf("%d\n", shm_array[1]);
-  //printf("%d\n", shm_array[2]);
+  cout << "user: reading from shared memory..." << endl;
+  printf("...retrieved: \n%d\n", shm_array[0] );
+  printf("%d\n", shm_array[1]);
+  printf("%d\n", shm_array[2]);
   
 
 
