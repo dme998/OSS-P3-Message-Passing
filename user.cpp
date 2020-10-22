@@ -78,9 +78,9 @@ int main() {
 
   
   cout << "user: reading from shared memory..." << endl;
-  printf("...retrieved: \n%d\n", shm_array[0] );
-  printf("%d\n", shm_array[1]);
-  printf("%d\n", shm_array[2]);
+  printf("...retrieved: %d", shm_array[0] );
+  printf("%d ", shm_array[1]);
+  printf("%d ", shm_array[2]);
 
   cout << "user: modifying shared memory: 9 10 11..." << endl;
   shm_array[0] = 9;
@@ -88,9 +88,9 @@ int main() {
   shm_array[2] = 11;
 
   cout << "user: reading from shared memory..." << endl;
-  printf("...retrieved: \n%d\n", shm_array[0] );
-  printf("%d\n", shm_array[1]);
-  printf("%d\n", shm_array[2]);
+  printf("...retrieved: %d ", shm_array[0] );
+  printf("%d ", shm_array[1]);
+  printf("%d ", shm_array[2]);
   
 
 
