@@ -42,13 +42,9 @@ int kms(int *shm_array) {
 }*/
 
 
-int main() {
-  
-  cout << "user: hello world" << endl;
-  sleep(1);
+int main() {  
 
-  
-  /* SHARED MEMORY */
+/* SHARED MEMORY */
   
   int shared_block_id;  //shmid
   key_t shmkey;         //obtained via ftok()
@@ -76,7 +72,7 @@ int main() {
     exit(1);
   }
 
-  
+  /*
   cout << "user: reading from shared memory..." << endl;
   printf("...retrieved: %d", shm_array[0] );
   printf("%d ", shm_array[1]);
@@ -91,7 +87,7 @@ int main() {
   printf("...retrieved: %d ", shm_array[0] );
   printf("%d ", shm_array[1]);
   printf("%d ", shm_array[2]);
-  
+  */
 
 
   /* MESSAGE QUEUES */ 
@@ -130,26 +126,26 @@ int main() {
   }
 
 
-
-  cout << "user: awake for critical section" << endl;
   /* CRITICAL SECTION */
+  cout << "user: awake for critical section" << endl;
   bool hasFlag = false; //master starts with flag (user should default to false)
   long mtype_flag = 3;
   mymsg.mtype = mtype_flag;  //distinguish flag messages from earlier tests
-  int debugLoopBreak = 0;
+  int debugLoopBreak = 0;  
   //strcpy(mymsg.mtext, "FLAG");
   
-  for(int i=0; i<3; i++) {
-    sleep(1);
+  for(int i=0; i<50; i++) {
+    sleep(0.1);
     cout << "user: loop number: " << i << endl;
-    //parbegin
+    //enter
     while (hasFlag == false) {
-      //cout << "user: while hasFlag is FALSE" << endl;
       if ( msgrcv(msqid, &mymsg, 80, mtype_flag, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
-        perror("perror: oss msgrcv");
-        sleep(1); //pause before trying msgq again
+        //perror("perror: oss msgrcv");
+        //sleep(0.1); //pause before trying msgq again
         debugLoopBreak++;
-        if (debugLoopBreak >= 5) {exit(1); exit(1);}
+        if (debugLoopBreak >= 50) {
+          //exit(1);
+        }
       }
       else {
         cout << "user: flag obtained." << mymsg.mtext << endl;
@@ -160,10 +156,10 @@ int main() {
     //CRITICAL
     if (hasFlag) {
       cout << "user: shared memory read: " << shm_array[2] << endl;
-      shm_array[2] = 99;
+      shm_array[2] = getpid();  //pid
       cout << "user: shared memory write: " << shm_array[2] << endl;
       
-      //parend
+      //exit
       if ( msgsnd(msqid, &mymsg, strlen(mymsg.mtext) + 1, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
         perror("perror: oss msgsnd");
         exit(1); //TODO kms
@@ -171,6 +167,7 @@ int main() {
       else {
         cout << "user: flag given up: " << mymsg.mtext << endl;
         hasFlag = false;
+        sleep(0.1);
       }
     }
   } // i-loop

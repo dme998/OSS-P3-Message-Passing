@@ -20,7 +20,7 @@ static int getSharedMemory(const char *filename, int size) {
   }
 
   // get shared block of memory  or create it if it doesn't exist
-  std::cout<<"oss: shmkey: " << key << std::endl;
+  //std::cout<<"oss: shmkey: " << key << std::endl;
   return shmget(key, size, PERM | IPC_CREAT);
 }
 

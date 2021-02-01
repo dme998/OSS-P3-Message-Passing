@@ -15,7 +15,6 @@
 #include <errno.h>      //for ENOMSG, etc
 //#include <<cstdlib>
 //#include <cstring>
-
 #include <shmfunctions.h>
 
 using namespace std;
@@ -24,6 +23,7 @@ using namespace std;
 /* Globals */
 const int MAX_C (100);               //max allowed value for option -c
 const char* THIS_FILE = "oss";       //filename for shared memory association
+const int CLOCK = 10;                //how much to increment simulated clock with each cycle
 int BLOCK_SIZE = (sizeof(int) * 3);  //shared memory block size
 bool verbose;                        //-v cmdl option
 volatile sig_atomic_t gSTOP = 0;     //signal handling: to declare program should stop running
@@ -68,7 +68,7 @@ void printWarning(int warning_code) {
 
 
 /* Fork-Exec to launch child process */
-int fexe() {
+int fexe() {  
   pid_t mypid = fork();
   if (mypid == -1) {
     perror("perror: fork failed");
@@ -83,11 +83,10 @@ int fexe() {
     
     if ( execv(args[0], args) == -1) {
       perror("perror: execv fail");
-      return(-1);
+      exit(1);
     }
   }
-
-  return 0;
+  return mypid;
 }
 
 /* signal handler */
@@ -99,7 +98,6 @@ void handler(int sig) {
 
 /* cleanup at end of program (not meant for early termination)  */
 int endProgram(int msqid) {
-  //TODO terminate child processes before self //TODO have a timeout period
   if(verbose){cout << "oss is terminating (waiting for children)..." << endl;}
   pid_t wpid;
   int status = 0;
@@ -136,18 +134,19 @@ void kms(int msqid) {
   //freeMemory, freeQueue used for whether or not to free shm and msq with ctl functions
 
   if (gSHM = 1) {
+    if(verbose){printf("oss: removing shared memory\n");}
     if ( shmctl(getSharedMemory(THIS_FILE, BLOCK_SIZE), IPC_RMID, NULL) == IPC_RESULT_ERROR ) {
       perror("oss: shmctl");
     }
   }
   if (gMSQ = 1) {
+    if(verbose){printf("oss: removing message queue\n");}
     if ( msgctl(msqid, IPC_RMID, NULL) == IPC_RESULT_ERROR ) {
       perror("oss: msgctl");
     }
   }
   
   //TODO kill child processes using pids obtained via fork
-  
   if(verbose){cout << "oss: terminating from signal" << endl;}
   exit(1);
 }
@@ -159,7 +158,7 @@ void kms(int msqid) {
 int main(int argc, char *argv[]) {
   signal(SIGINT, handler);
   signal(SIGALRM, handler);
-
+  
   /* cmdl args */
   int option;              //getopt option
   int pr_max = 5;          //max number of child processes spawned (def: 5) 
@@ -168,8 +167,8 @@ int main(int argc, char *argv[]) {
   verbose = false;         //if true, lots of extra info will be printed to console (global)
   
   /* shared memory values */
-  int shm_clock_s = 0;     //shared clock (seconds)
-  int shm_clock_ns = 0;    //shared clock (nanoseconds)
+  int shm_clock_s = 0;     //shared clock (seconds), holds next value to add to shm
+  int shm_clock_ns = 0;    //shared clock (nanoseconds), holds next value to add to shm
   int shm_pid = 0;         //shared user process id for termination 
 
   if (verbose) {cout << "oss: hello world" << endl;}
@@ -230,22 +229,10 @@ int main(int argc, char *argv[]) {
     return 1;
   }
     
-  //TODO define clock and get it into shared memory
-  if (verbose) {cout << "oss: writing into shared memory: 4, 5, 6." << endl;}
-  shm_array[0] = 4;
-  shm_array[1] = 5;
-  shm_array[2] = 6;
-
-  if (verbose) {
-    cout << "oss: read from shared memory: ";
-    printf("%d ", shm_array[0] );
-    printf("%d ", shm_array[1] );
-    printf("%d\n", shm_array[2] );
-  }
-
   if(gSTOP == 1) {kms(-1);}
 
   fexe(); // fork, exec
+ 
 
 
   /* Message Queues */
@@ -289,20 +276,25 @@ int main(int argc, char *argv[]) {
   long mtype_flag = 3;
   mymsg.mtype = mtype_flag;  //distinguish flag messages from earlier test messages
   
-  for(int i=0; i<3; i++) {
+  for(int i=0; i<30; i++) {
     if(gSTOP == 1) {kms(msqid);}
-    sleep(1);
+    
     if (verbose) {cout << "oss: loop number: " << i << endl;}
     
-    //parbegin
+    //clock (temp)
+    if ( (shm_clock_ns += CLOCK) >= 1000000000 ) {
+      shm_clock_ns = 0;
+      shm_clock_s++;
+    }
+        
+    //enter
     while (hasFlag == false) {
-      //cout << "oss: enter while (hasFlag == false)" << endl;
       if ( msgrcv(msqid, &mymsg, 80, mtype_flag, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
-        perror("oss msgrcv");
-        sleep(1); //pause before trying msgq again
+        //perror("oss msgrcv");
+        //sleep(0.1); //pause before trying msgq again
       }
       else {
-        if (verbose) {cout << "oss: flag obtained." << mymsg.mtext << endl;}
+        cout << "oss: flag obtained." << mymsg.mtext << endl;
         hasFlag = true;
       }
     }
@@ -311,10 +303,16 @@ int main(int argc, char *argv[]) {
     if (hasFlag) {
       if (verbose) {cout << "oss: now in the critical section." << endl;}
       cout << "oss: shared memory read: " << shm_array[2] << endl;
-      shm_array[2] = 11;
-      cout << "oss: shared memory write: " << shm_array[2] << endl;
       
-      //parend
+      shm_array[0] += shm_clock_s;
+      if ( (shm_array[1] += shm_clock_ns ) >= 1000000000 ) {
+        shm_array[1] = 0;
+        shm_array[0]++;
+      }
+      
+      cout << "CURRENT TIME: " << shm_array[0] << ":" << shm_array[1] << endl;
+      
+      //exit
       if ( msgsnd(msqid, &mymsg, strlen(mymsg.mtext) + 1, IPC_NOWAIT) == IPC_RESULT_ERROR ) {
         perror("oss msgsnd");
         exit(1); //TODO kms
@@ -322,6 +320,7 @@ int main(int argc, char *argv[]) {
       else {
         cout << "oss: flag given up: " << mymsg.mtext << endl;
         hasFlag = false;
+        sleep(0.1);
       }
     }
   } // i-loop

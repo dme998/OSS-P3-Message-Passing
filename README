@@ -3,4 +3,22 @@ Project 3 - Message Passing and Operating System Simulator
 Author: Daniel Eggers
 Date: Oct 20, 2020
 
+Both oss and user can be run independently, though user will not be able to access
+shared memory if oss doesn't create it (causing early termination).
+
+There's a working clock and critical section, with mutual exclusion 
+enforced with a message queue.  
+
+Some signal handling.  The -t option sets a SIGALRM.  
+Unfortunately, there are instances of leftover shared memory if early termination.  
+If ./oss runs default, all memory and msq is properly cleaned.  
+
+The master only ever launches one child.  There's a demonstration of shared memory and
+message queues with the critical section, and the clock increments and rolls over properly.  
+
+I added a -v (verbose) option that I abandoned for lack of time.  As of now, it only affects 
+the output of oss, while the user process is verbose by default.  
+
+The last commit is a cleaner rendition of the program, but it lacks any clock implementation.  
+
 
